@@ -646,6 +646,7 @@ def query_sport_events_from_salaries_and_year(seuil:int, gain:int) -> dict:
             END AS nb_jour_bien_etre
         FROM evenements_sport
         GROUP BY salarie_id, annee
+        ORDER BY annee
     """
 
     result = []
@@ -760,7 +761,8 @@ def calcul_prime(row):
     income = incomes.get(row['id_salarie'], None)
     if income is None:
         return None
-    if row['ratio_jours'] > rules['%_jours_eligibles_par_an']:
+    
+    if (row['ratio_jours'] > rules['%_jours_eligibles_par_an']) and (row['est_eligible_prime_annuel'] == True):
         return round(rules['prime_annuelle_%_brut'] * income / 100,2)
     return 0
 
@@ -1110,9 +1112,11 @@ while True:
             df_silver['année'] = df_silver['date_fin'].dt.year
             # Somme par année et par salarié
             df_gold = (
-                df_silver[df_silver['est_eligible_prime_annuel']]
-                .groupby(['id_salarie', 'année'], as_index=False)
+                df_silver
+                .groupby(['id_salarie', 'année', 'est_eligible_prime_annuel'], as_index=False)
                 .agg({'durée': 'sum'})
+                .sort_values('année')
+                .reset_index(drop=True)
             )
             df_gold['ratio_jours'] = df_gold.apply(lambda row: round(100 * row['durée'] / days_in_year(row['année']),2), axis=1)
             df_gold['montant_prime'] = df_gold.apply(calcul_prime, axis=1)
