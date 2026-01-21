@@ -1,0 +1,20 @@
+{
+  "entreprises": [
+    {
+      "id": 0,
+      "type": "Siège Social",
+      "adresse": "1362 avenue des Platanes, 34970 Lattes, France",
+      "ville": "Lattes",
+      "code_postal": "34970",
+      "pays": "France"
+	}
+  ],
+  "parametres_regles": {
+	"%_jours_eligibles_par_an":80,
+	"prime_annuelle_%_brut":5,
+	"nb_journee_bien_etre_gagnees":5,
+	"nb_activite_physique_min":15,
+	"marche_running_distance_max_m":15000,
+	"velo_trottinette_distance_max_m":25000
+  }
+}

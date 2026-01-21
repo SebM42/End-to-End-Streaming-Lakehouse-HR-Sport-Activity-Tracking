@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libgeos-dev \
+    libproj-dev \
+    proj-data \
+    proj-bin \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir osmnx psycopg2-binary geopy kafka-python deltalake pyarrow scikit-learn great_expectations==0.18.22 duckdb>=1.5 prometheus-client slack-sdk

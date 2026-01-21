@@ -1,3 +1,11 @@
+# custom
+postgres/data/
+redpanda/
+datalake/
+osmnx/
+data_metier/Donnees_RH.xlsx
+test.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

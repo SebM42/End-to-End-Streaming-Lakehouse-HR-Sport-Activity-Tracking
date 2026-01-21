@@ -1,0 +1,33 @@
+global:
+  # Fréquence de collecte des métriques
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+
+  # ----------------------------
+  # Redpanda (Kafka / Broker)
+  # ----------------------------
+  - job_name: "redpanda"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "redpanda:9644"
+
+  # ----------------------------
+  # Debezium (CDC Connect)
+  # ----------------------------
+  - job_name: "debezium"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "debezium:8080"
+
+  # ----------------------------
+  # Python Consumer
+  # ----------------------------
+  - job_name: "py-consumer"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "py-consumer:8000"

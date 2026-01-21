@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-sport-poc
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: sport_poc
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_sport
+      POSTGRES_HOST_AUTH_METHOD: md5
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/init-db/:/docker-entrypoint-initdb.d/
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_replication_slots=4
+      -c max_wal_senders=4
+      -c listen_addresses='*'
+    networks:
+    - oc-p12-network
+    restart: always
+    
+  init-services:
+    build:
+      context: .
+      dockerfile: Dockerfile-psql
+    container_name: init-services
+    environment:
+      USER: admin
+      PW: admin_sport
+    networks:
+    - oc-p12-network
+    entrypoint: ["bash", "/scripts/init.sh"]
+    depends_on:
+      - redpanda
+      - postgres
+      - debezium
+      - py-consumer
+
+  redpanda:
+    image: redpandadata/redpanda
+    container_name: redpanda
+    ports:
+      - "9644:9644"
+    command: 
+      - redpanda start 
+      - --overprovisioned 
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    volumes:
+      - ./redpanda/data:/var/lib/redpanda/data
+    networks:
+    - oc-p12-network
+    restart: always
+
+  debezium:
+    image: debezium/connect:2.2
+    container_name: debezium
+    volumes:
+    - ./debezium/jmx_prometheus_javaagent.jar:/kafka/libs/jmx_prometheus_javaagent.jar:ro
+    - ./debezium/jmx-exporter.yml:/jmx-exporter.yml:ro
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+      METRICS_ENABLED: true
+      KAFKA_OPTS: -javaagent:/kafka/libs/jmx_prometheus_javaagent.jar=8080:/jmx-exporter.yml
+    networks:
+      - oc-p12-network
+    depends_on:
+      - redpanda
+      - postgres
+    restart: always
+  
+  py-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile-py-consumer
+    container_name: py-consumer
+    depends_on:
+      - redpanda
+      - postgres
+      - debezium
+    volumes:
+      - ./datalake:/datalake
+      - ./datalake/checkpoints:/datalake/checkpoints
+      - ./py/py_consumer.py:/py_consumer.py
+      - ./config.json:/config.json
+      - ./osmnx:/tmp
+      - ./osmnx/osmnx_cache:/tmp/osmnx_cache
+      
+    networks:
+      - oc-p12-network
+    command:
+      - python
+      - py_consumer.py
+      
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    depends_on:
+      - redpanda
+      - postgres
+      - debezium
+      - py-consumer
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks:
+      - oc-p12-network
+      
+networks:
+  oc-p12-network:
+    driver: bridge
