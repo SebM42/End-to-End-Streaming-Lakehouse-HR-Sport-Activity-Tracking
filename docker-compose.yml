@@ -21,6 +21,28 @@ services:
     networks:
     - oc-p12-network
     restart: always
+  
+  postgres_exporter_rh:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter_rh
+    environment:
+      DATA_SOURCE_NAME: "postgresql://admin:admin_sport@postgres-sport-poc:5432/rh?sslmode=disable"
+    depends_on:
+      - postgres
+    restart: always
+    networks:
+    - oc-p12-network
+
+  postgres_exporter_sport_poc:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter_sport_poc
+    environment:
+      DATA_SOURCE_NAME: "postgresql://admin:admin_sport@postgres-sport-poc:5432/sport_poc?sslmode=disable"
+    depends_on:
+      - postgres
+    restart: always
+    networks:
+    - oc-p12-network
     
   init-services:
     build:

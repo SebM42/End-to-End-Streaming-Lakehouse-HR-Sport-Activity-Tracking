@@ -31,3 +31,19 @@ scrape_configs:
     static_configs:
       - targets:
           - "py-consumer:8000"
+          
+  # ----------------------------
+  # DB rh
+  # ----------------------------
+  - job_name: "postgres-db-rh"
+    static_configs:
+      - targets:
+          - 'postgres_exporter_rh:9187'
+          
+  # ----------------------------
+  # DB sport_poc
+  # ----------------------------
+  - job_name: "postgres-db-sport_poc"
+    static_configs:
+      - targets:
+          - 'postgres_exporter_sport_poc:9187'
