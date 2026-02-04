@@ -5,6 +5,7 @@ datalake/
 osmnx/
 data_metier/Donnees_RH.xlsx
 test.py
+clean_slack.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

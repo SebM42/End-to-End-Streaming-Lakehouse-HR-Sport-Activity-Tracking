@@ -353,7 +353,7 @@ consumer_sport = KafkaConsumer(
 )
 
 # =========================================================
-# 3. Géolocalisation & graph OSMNX (chargés UNE fois)
+# 3. Géolocalisation & graph OSMNX
 # =========================================================
 
 def geocode_ban(adresse):
@@ -381,7 +381,7 @@ office_address = entreprises.get(0)
 lat_office, lon_office, error_office = geocode_ban(office_address)
 
 if error_office is not None:
-    print("CRITICAL ERROR : adresse de l'entreprise non reconnue ; raison : {error_office}")
+    print("CRITICAL ERROR : adresse de l'entreprise non reconnue ; raison : {error_office}",flush=True)
 
 center_point = (lat_office, lon_office)
 
@@ -419,7 +419,7 @@ def send_slack_message(message: str):
         )
         return response
     except SlackApiError as e:
-        print(f"Erreur Slack: {e.response['error']}")
+        print(f"Erreur Slack: {e.response['error']}",flush=True)
         return e.response
     
 
@@ -585,7 +585,7 @@ def write_postgres_salaries(rows, action='insert'):
                         values
                     )
                 else:
-                    print(f'Action {action} non autorisée. Transaction Postgres interrompue.')
+                    print(f'Action {action} non autorisée. Transaction Postgres interrompue.',flush=True)
     finally:
         conn.close()
 
@@ -620,7 +620,7 @@ def query_rh_table_for_values(id_salarie: int) -> dict:
                 if row:
                     result = dict(row)
     except Exception as e:
-        print(f"Erreur query_rh_table_for_values id={id_salarie}: {e}")
+        print(f"Erreur query_rh_table_for_values id={id_salarie}: {e}",flush=True)
     
     return result
 
@@ -769,9 +769,9 @@ def calcul_prime(row):
 # =========================================================
 # 5. Boucle principale Kafka - Consommation des topics et pipeline de transformation
 # =========================================================
-print("Prometheus service starting ...")
+print("Prometheus service starting ...",flush=True)
 start_http_server(8000)
-print("Prometheus service up and running.")
+print("Prometheus service up and running.",flush=True)
 
 print("Worker started, waiting for Kafka messages...",flush=True)
 
@@ -798,7 +798,7 @@ while True:
     postgres_rows_to_delete_rh = []
     
     if polled_rh:
-        print('Processing poll RH ...')
+        print('Processing poll RH ...',flush=True)
     
         for msgs in polled_rh.values():
             for msg in msgs:
@@ -808,7 +808,7 @@ while True:
                     payload = msg.value  # value désérialisé via value_deserializer
                     payload = payload.get("payload", {})
                 except Exception as e:
-                    print("Erreur parsing message:", e)
+                    print("Erreur parsing message:", e,flush=True)
                     traceback.print_exc()
                     continue  # on skip ce message
         
@@ -882,7 +882,7 @@ while True:
                         )
                         #print(f'Update : eligibilite before = {elig_before} ; eligibilite after = {elig_after}')
                         if elig_before != elig_after:
-                            print('Update : Changement éligibilité')
+                            print('Update : Changement éligibilité',flush=True)
                             id_salarie = after.get("id_salarie")
                 
                             # Clôture de la ligne active
@@ -913,7 +913,7 @@ while True:
                         id_salarie=id_salarie,
                         now=now
                     )
-        print("Poll rh processing succesfully terminated.")
+        print("Poll rh processing succesfully terminated.",flush=True)
 
     # 2. Transformation batch Sport
     slack_error_rows = []
@@ -922,7 +922,7 @@ while True:
     annees_to_update = []
     
     if polled_sport:
-        print('Processing poll sport ...')
+        print('Processing poll sport ...',flush=True)
     
         for msgs in polled_sport.values():
             for msg in msgs:
@@ -976,7 +976,7 @@ while True:
                         "error": str(e),
                         "timestamp": now
                     })
-        print("Poll sport processing succesfully terminated.")
+        print("Poll sport processing succesfully terminated.",flush=True)
     
     # 3. Écriture batchs
     if bronze_rows_rh:
