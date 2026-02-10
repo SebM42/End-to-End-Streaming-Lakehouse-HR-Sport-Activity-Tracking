@@ -58,39 +58,44 @@ create_connector() {
 }
 
 # Liste de connecteurs à créer
-create_connector "postgres-sport-connector" '{
+create_connector "postgres-sport-connector" "$(cat <<EOF
+{
   "name": "postgres-sport-connector",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "database.hostname": "postgres",
     "database.port": "5432",
-    "database.user": "admin",
-    "database.password": "admin_sport",
+    "database.user": "${DB_USER}",
+    "database.password": "${PGPASSWORD}",
     "database.dbname": "sport_poc",
     "topic.prefix": "pg_sport",
     "table.include.list": "public.evenements_sport",
     "plugin.name": "pgoutput",
-	"slot.name": "debezium_sport"
+    "slot.name": "debezium_sport"
   }
-}'
+}
+EOF
+)"
 
-create_connector "postgres-rh-connector" '{
+create_connector "postgres-rh-connector" "$(cat <<EOF
+{
   "name": "postgres-rh-connector",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "database.hostname": "postgres",
     "database.port": "5432",
-    "database.user": "admin",
-    "database.password": "admin_sport",
+    "database.user": "${DB_USER}",
+    "database.password": "${PGPASSWORD}",
     "database.dbname": "rh",
     "topic.prefix": "pg_rh",
     "table.include.list": "public.salaries",
     "plugin.name": "pgoutput",
-    "snapshot.mode": "initial",
-	"slot.name": "debezium_rh"
+	"snapshot.mode": "initial",
+    "slot.name": "debezium_rh"
   }
-}'
-
+}
+EOF
+)"
 
 echo "Initalisation des connecteurs debezium OK !"
 

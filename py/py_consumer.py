@@ -298,16 +298,19 @@ ox.settings.cache_folder = "/tmp/osmnx_cache"
 ox.settings.log_console = True
 
 # POSTGRES
+
+
 conn_params = {
     "host": "postgres-sport-poc",
     "port": 5432,
-    "user": "admin",
-    "password": "admin_sport"
+    "user": os.getenv("POSTGRES_USER"),
+    "password": os.getenv("POSTGRES_PW")
 }
 
 # SLACK
-SLACK_BOT_TOKEN = "xoxb-10223653826839-10267398545776-hQNGAPwibN0B3b13xb2nndgH"
-CHANNEL_ID = "C0A7VC47BL0"
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+MOCK_SLACK_MESSAGE = os.getenv("MOCK_SLACK_MESSAGE").lower() == "true"
 
 client = WebClient(token=SLACK_BOT_TOKEN)
 
@@ -412,15 +415,18 @@ print("Graphs OSMNX ready")
 # =========================================================
 
 def send_slack_message(message: str):
-    try:
-        response = client.chat_postMessage(
-            channel=CHANNEL_ID,
-            text=message
-        )
-        return response
-    except SlackApiError as e:
-        print(f"Erreur Slack: {e.response['error']}",flush=True)
-        return e.response
+    if MOCK_SLACK_MESSAGE == False:
+        try:
+            response = client.chat_postMessage(
+                channel=CHANNEL_ID,
+                text=message
+            )
+            return response
+        except SlackApiError as e:
+            print(f"Erreur Slack: {e.response['error']}",flush=True)
+            return e.response
+    else:
+        print(f'Mocking slackbot with message : {message}')
     
 
 def distance_lineaire(lat1, lon1, lat2, lon2):

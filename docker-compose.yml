@@ -6,8 +6,8 @@ services:
       - "5433:5432"
     environment:
       POSTGRES_DB: sport_poc
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin_sport
+      POSTGRES_USER: ${POSTGRES_ADMIN_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PW}
       POSTGRES_HOST_AUTH_METHOD: md5
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
@@ -19,30 +19,30 @@ services:
       -c max_wal_senders=4
       -c listen_addresses='*'
     networks:
-    - oc-p12-network
+    - poc-network
     restart: always
   
   postgres_exporter_rh:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres_exporter_rh
     environment:
-      DATA_SOURCE_NAME: "postgresql://admin:admin_sport@postgres-sport-poc:5432/rh?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_ADMIN_USERNAME}:${POSTGRES_ADMIN_PW}@postgres-sport-poc:5432/rh?sslmode=disable"
     depends_on:
       - postgres
     restart: always
     networks:
-    - oc-p12-network
+    - poc-network
 
   postgres_exporter_sport_poc:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres_exporter_sport_poc
     environment:
-      DATA_SOURCE_NAME: "postgresql://admin:admin_sport@postgres-sport-poc:5432/sport_poc?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_ADMIN_USERNAME}:${POSTGRES_ADMIN_PW}@postgres-sport-poc:5432/sport_poc?sslmode=disable"
     depends_on:
       - postgres
     restart: always
     networks:
-    - oc-p12-network
+    - poc-network
     
   init-services:
     build:
@@ -50,10 +50,10 @@ services:
       dockerfile: Dockerfile-psql
     container_name: init-services
     environment:
-      USER: admin
-      PW: admin_sport
+      USER: ${POSTGRES_ADMIN_USERNAME}
+      PW: ${POSTGRES_ADMIN_PW}
     networks:
-    - oc-p12-network
+    - poc-network
     entrypoint: ["bash", "/scripts/init.sh"]
     depends_on:
       - redpanda
@@ -78,7 +78,7 @@ services:
     volumes:
       - ./redpanda/data:/var/lib/redpanda/data
     networks:
-    - oc-p12-network
+    - poc-network
     restart: always
 
   debezium:
@@ -96,7 +96,7 @@ services:
       METRICS_ENABLED: true
       KAFKA_OPTS: -javaagent:/kafka/libs/jmx_prometheus_javaagent.jar=8080:/jmx-exporter.yml
     networks:
-      - oc-p12-network
+      - poc-network
     depends_on:
       - redpanda
       - postgres
@@ -107,6 +107,12 @@ services:
       context: .
       dockerfile: Dockerfile-py-consumer
     container_name: py-consumer
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USERNAME}
+      POSTGRES_PW: ${POSTGRES_ADMIN_PW}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      CHANNEL_ID: ${CHANNEL_ID}
+      MOCK_SLACK_MESSAGE: ${MOCK_SLACK_MESSAGE}
     depends_on:
       - redpanda
       - postgres
@@ -120,7 +126,7 @@ services:
       - ./osmnx/osmnx_cache:/tmp/osmnx_cache
       
     networks:
-      - oc-p12-network
+      - poc-network
     command:
       - python
       - py_consumer.py
@@ -140,8 +146,8 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - oc-p12-network
+      - poc-network
       
 networks:
-  oc-p12-network:
+  poc-network:
     driver: bridge

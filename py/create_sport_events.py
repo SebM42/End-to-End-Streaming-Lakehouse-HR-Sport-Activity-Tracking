@@ -10,9 +10,15 @@ import argparse
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
+env_path = os.path.join(BASE_DIR.parent, ".env")
+load_dotenv(env_path)
+POSTGRES_ADMIN_USERNAME = os.getenv("POSTGRES_ADMIN_USERNAME")
+POSTGRES_ADMIN_PW = os.getenv("POSTGRES_ADMIN_PW")
 
 # charge les données sportives
 sport_data = pd.read_excel(BASE_DIR.parent / 'data_metier' / 'Donnees_sportive.xlsx').dropna()
@@ -334,7 +340,7 @@ def main(nb_events):
     # -----------------------
     
     engine = create_engine(
-        "postgresql+psycopg2://admin:admin_sport@localhost:5433/sport_poc"
+        f"postgresql+psycopg2://{POSTGRES_ADMIN_USERNAME}:{POSTGRES_ADMIN_PW}@localhost:5433/sport_poc"
     )
 
     # Insertion en base
