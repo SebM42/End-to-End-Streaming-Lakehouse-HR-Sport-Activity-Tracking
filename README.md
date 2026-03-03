@@ -1,156 +1,120 @@
-# 🏃‍♂️ Sport & HR Streaming POC
+# End-to-End Streaming Lakehouse — HR & Sport Activity Tracking
 
-**Table of contents**
-
-- [Project Goal](#-project-goal)
-- [What This POC Demonstrates](#-what-this-poc-demonstrates)
-- [Pipeline Architecture and Workflow](#-pipeline-architecture-and-workflow)
-	- [Main steps](#-main-steps)
-	- [Pipeline Diagram](#-pipeline-diagram)
-- [Tech Stack](#-tech-stack)
-- [Running the Project](#-running-the-project)
-	- [Prerequisites](#-prerequisites)
-	- [Start the services](#-start-the-services)
-	- [Simulate sport events](#-simulate-sport-events)
-- [Outputs and Results](#-outputs-and-results)
-- [Possible Improvements](#-possible-improvements)
+`Python` `Kafka/Redpanda` `Debezium` `Delta Lake` `Great Expectations` `Prometheus` `OSMNX`
 
 ---
 
-## 🎯 Project Goal
+## Overview
 
-This project is a **Data Engineering Proof of Concept** that demonstrates a **real-time data streaming pipeline** for tracking employee sport activities and computing HR-related insights such as:
-- Annual bonuses based on activity
-- Wellness day eligibility
-- Real-time Slack notifications
-- Data quality validation for HR & sport data
+Production-grade event-driven pipeline simulating HR and sport activity tracking — from database state changes to business-ready lakehouse outputs.
 
-The goal is to validate both the technical architecture and the business rules in a **modern streaming & lakehouse context**.
+The project covers the full data path: CDC capture, event streaming, business rule processing (including geospatial computation), lakehouse historization, data quality validation, and pipeline observability. Architecture decisions were driven by production constraints redefined from the original spec.
 
 ---
 
-## 🧠 What This POC Demonstrates
+## Architecture
 
-- **CDC from PostgreSQL** using Debezium  
-- **Event streaming** with Kafka (Redpanda)  
-- **Python-based stream processing** with micro-batch handling  
-- **Data lakehouse architecture** with Delta Lake (Bronze → Silver → Gold)  
-- **Data quality checks** using Great Expectations  
-- **Real-time notifications** via Slack  
-- **Basic observability** with Prometheus  
-
-This POC is designed to show **end-to-end streaming processing** and **data reliability** for business use cases.
+![Architecture diagram](YOUR_IMAGE_LINK_HERE)
 
 ---
 
-## 🗂️ Pipeline Architecture and Workflow
+## Architecture decisions
 
-### Main steps:
+**CDC — adapted to each source table's nature.**  
+The sport events table is a fact table: every INSERT is a business event by definition, CDC is the natural fit. The HR table is a state table, but only 2 columns are monitored alongside create/delete operations — with a small row count (161 employees at current scale), CDC remains well-suited and the captured change volume stays minimal and predictable.
 
-1. **Data Generation & CDC**
-   - HR and sport event data are stored in PostgreSQL (rh and sport_poc databases) to simulate real-world scenarios
-   - Logical replication enabled for CDC
-   - Debezium captures changes and publishes to Kafka topics
+**Poll interval at 100ms — latency over throughput.**  
+The consumer polls Kafka every 100ms. This is not a throughput optimization — even at 10,000 employees, the expected volume is ~20,000 events/day (~0.2 events/second). In practice, most poll windows will return 0 or 1 message. The 100ms interval is a deliberate choice for **processing regularity and low latency**, not batch efficiency.
 
-2. **Event Streaming**
-   - Redpanda (Kafka) serves as the central event bus, transporting all change events captured from the databases
-   - Debezium publishes HR data changes to pg_rh.public.salaries and sport activity events to pg_sport.public.evenements_sport
-   - Allows downstream services to consume updates in real time, enabling reactive pipelines and near-instant synchronization across systems
+**SCD Type 2 scoped to auditability, not retroactive rule changes.**  
+The Silver layer tracks the full history of each record. Once a row is closed (end date set), it becomes immutable — historical records reflect the state at the time they were active. This is intentional: the goal is lineage and auditability, not replaying updated business rules against past data.
 
-3. **Stream Processing**
-   - Python consumer reads from Kafka
-   - Applies business rules:
-     - Eligibility for wellness days
-     - Bonus computation
-     - Home-to-work distance calculation (OSMNX + BAN API)
-   - Sends Slack notifications
-   - Writes cleaned and enriched data to Delta Lake
+**Quarantine logic for implausible records.**  
+Records failing business plausibility checks are routed to a quarantine zone rather than rejected or silently dropped. This preserves the ability to investigate anomalies without polluting the Silver layer.
 
-4. **Lakehouse Storage**
-   - **Bronze**: Raw CDC events
-   - **Silver**: Cleaned and historized SCD Type 2 tables
-   - **Gold**: Business-ready aggregates
+**PII excluded from the lakehouse.**  
+Personally identifiable information is not persisted in Bronze, Silver, or Gold. Business rules requiring PII (e.g. address-based distance computation via OSMNX/BAN API) are applied in-stream — only the computed results are stored.
 
-5. **Monitoring & Quality**
-   - Prometheus scrapes metrics from the consumer
-   - Great Expectations validates data in each layer
-   - Alerts generated for inconsistencies
+**Data quality gates at every layer transition.**  
+Great Expectations validates data at Bronze → Silver and Silver → Gold. Catching issues at ingestion rather than at reporting time reduces the blast radius of upstream anomalies.
+
+**At-least-once delivery with explicit crash handling.**  
+Kafka delivers at-least-once by default. Exactly-once would require Kafka transactions and transactional writes to Delta Lake — complexity not justified at this scale. Instead, crash scenarios are handled explicitly in the consumer:
+- Crash before any write → no offset commit → message re-delivered → processing is idempotent at this stage ✓
+- Crash during Bronze/Silver write → failing batch routed to a **dead letter table** (Delta) for investigation and optional reinjection → offset committed ✓. If the dead letter write itself fails → error logged, offset committed anyway → loss is acceptable and diagnosable via logs ✓
+- Crash after Silver, during Gold write → offset committed → Gold is recalculated from Silver on next run, idempotent by design ✓
 
 ---
 
-### Pipeline Diagram
+## Initialization & bootstrap
 
-<img src="./img/architecture.png" alt="Architecture diagram" width="1000"/>
+On first launch, the `init-services` container:
+1. Starts PostgreSQL and waits for readiness
+2. Creates the second database and all tables
+3. Registers Debezium connectors
 
----
+The HR connector runs with `snapshot.mode = initial` — on registration, Debezium performs a full scan of the existing employees table. These records flow through the broker and are processed by the Python consumer, triggering home-to-work distance computation (OSMNX/BAN API) for all existing employees and populating Silver and Gold from the start.
 
-## ⚙️ Tech Stack
-
-- **Containerization**: Docker, Docker Compose
-- **Databases**: PostgreSQL
-- **CDC**: Debezium
-- **Streaming**: Redpanda (Kafka)
-- **Processing**: Python
-- **Data Lakehouse**: Delta Lake
-- **Data Quality**: Great Expectations
-- **Monitoring**: Prometheus
-- **Notifications**: Slack API
-- **Geospatial**: OSMNX, BAN API
+No mock data is loaded at init. This is intentional: initialization only sets up infrastructure, consistent with how a production deployment would behave.
 
 ---
 
-## 🚀 Running the Project
+## Tech stack
+
+| Layer | Tools |
+|---|---|
+| Source databases | PostgreSQL |
+| CDC | Debezium |
+| Event streaming | Redpanda (Kafka API) |
+| Stream processing | Python (100ms poll interval) |
+| Lakehouse storage | Delta Lake (Bronze / Silver / Gold) |
+| Data quality | Great Expectations |
+| Geospatial | OSMNX · BAN API |
+| Observability | Prometheus |
+| Notifications | Slack API |
+| Infra | Docker · Docker Compose |
+
+---
+
+## Running the project
 
 ### Prerequisites
-- Docker & Docker Compose installed
-- Python >=3.11 to simulate random sport events
-- One of the following:
-  - **Set environment variables manually:**
-    ```bash
-    export POSTGRES_ADMIN_USERNAME="your_admin_username"
-    export POSTGRES_ADMIN_PW="your_admin_password"
-    export MOCK_SLACK_MESSAGE=true
-    export SLACK_BOT_TOKEN="your_token"         # optional, only needed if MOCK_SLACK_MESSAGE=false
-    export CHANNEL_ID="your_channel_id"         # optional, only needed if MOCK_SLACK_MESSAGE=false
-    ```
-  - **Or** copy `.env.example` to `.env` and replace placeholders with your own values:
-    ```bash
-    cp .env.example .env
-    # Then edit .env to set your variables
-    ```
 
-### Start the services
+- Docker & Docker Compose
+- Python ≥ 3.11 (event simulation only)
+- Credentials via environment variables or `.env` (see `.env.example`)
 
 ```bash
+cp .env.example .env
+# fill in POSTGRES credentials + SLACK token if needed
 docker compose up -d
 ```
 
-⚠️ First launch might take a few minutes.
-
-The init-services container automatically:
-- Initializes PostgreSQL databases
-- Loads CSV seed data
-- Registers Debezium connectors
+The init sequence runs automatically on first launch. Silver and Gold are populated during init via the snapshot scan of the existing employees table.
 
 ### Simulate sport events
 
 ```bash
-python ./py/create_sport_events.py -e 100 #adjust number of events to create
+python ./py/create_sport_events.py -e 100  # adjust event count
 ```
 
-## 📊 Outputs and Results
-The pipeline produces:
-- Raw CDC events stored in Bronze layer
-- Cleaned & historized tables in Silver layer
-- Aggregates & business KPIs in Gold layer
-- Slack notifications for employee activities
-- Prometheus metrics for pipeline observability
-- Data quality validation reports
+Events flow through the full pipeline automatically from there.
 
-## 🔍 Possible Improvements
-- Implement schema evolution handling for CDC changes
-- Add fault tolerance and exactly-once semantics in stream processing
-- Enhance monitoring dashboards (Grafana, alerting)
-- Support multi-region or cloud deployment
-- Add unit tests and integration tests for the Python consumer
-- Extend Slack notifications with rich formatting or reporting
+---
+
+## What's not in scope (and why)
+
+**Exactly-once semantics** — handled via explicit crash recovery logic instead (see architecture decisions above). Kafka transactions would add disproportionate complexity for the delivery guarantees already achieved.
+
+**Schema evolution handling** — Debezium supports schema change events, but handling them in the consumer adds non-trivial complexity. Flagged as a natural extension once the core pipeline is stable.
+
+**Grafana dashboards** — Prometheus metrics are exposed and scrapable. Grafana is the logical next step but out of scope here; the focus was on instrumentation, not visualization.
+
+---
+
+## Possible extensions
+
+- Schema evolution handling for CDC schema change events
+- Grafana dashboards + alerting on pipeline metrics
+- Unit and integration tests for the Python consumer
+- Multi-region or cloud deployment
