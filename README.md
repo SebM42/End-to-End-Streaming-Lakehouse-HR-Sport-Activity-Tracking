@@ -14,7 +14,7 @@ The project covers the full data path: CDC capture, event streaming, business ru
 
 ## Architecture
 
-![Architecture diagram](YOUR_IMAGE_LINK_HERE)
+![Architecture diagram](./img/architecture.png)
 
 ---
 
